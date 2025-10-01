@@ -1,0 +1,2 @@
+
+This folder will hold all the nodes of the persistant data structure.
