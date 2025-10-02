@@ -1,4 +1,6 @@
-
+import platform
+import stat
+import os
 from datetime import datetime
 
 class PatientRecord:
@@ -23,8 +25,8 @@ class PatientRecord:
     def add_node(self,operation, old_data,new_data):
         time = self.getCurrentTime()
         hash = self.hash_function()
-        folderPath = './storage/'+time
-        with open(folderPath,'w') as node_file:
+        filePath = './storage/'+time
+        with open(filePath,'w') as node_file:
             node_file.write(operation)
             node_file.write('\n')
             if (operation == 'update'):
@@ -33,8 +35,44 @@ class PatientRecord:
 
             node_file.write(new_data)
             node_file.write('\n')
+
             node_file.write('hash: ')
             node_file.write(hash)
+
+
+        platform_type = platform.system()
+        if (platform_type == 'Windows'):
+            os.chmod(filePath,stat.S_IREAD)
+        else:
+            os.chmod(filePath,0o444)
+
+        print(f"Added node with name {filePath} and \nmade it readonly on platform: {platform_type}")
+
+
+
+    def convert_patient_data_to_str(self,data):
+        if (len(data) != 4):
+            print("Invalid data has been given to the converting patient data to str function")
+            return None
+
+        id = data[0]
+        name = data[1]
+        isCured = data[2]
+        diseases = data[3]
+        res = f"{str(id)} {name} {str(isCured)} ["
+        for i in range(len(diseases)):
+            if (i != len(diseases)-1):
+                res+= f"{diseases[i]},"
+            else:
+                res+= f"{diseases[i]}"
+
+        res+="]"
+
+        return res
+
+            
+
+
 
 
 
