@@ -5,7 +5,8 @@ from datetime import datetime
 
 class PatientRecord:
     def __init__(self):
-        self.tree = None
+        self.root = None
+        self.temp_root = None
         self.storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'storage'))
         os.makedirs(self.storage_dir, exist_ok=True)
 
@@ -145,11 +146,62 @@ class PatientRecord:
             return False
 
 
+    def filter_invalid_files(self, files):
+        valid_files = []
+        for f in files:
+            try:
+                # Try to parse with datetime
+                datetime.strptime(f, "%d-%m-%Y %H-%M-%S")
+                valid_files.append(f)
+            except ValueError:
+                print(f"Invalid filename skipped: {f}")
+        return valid_files
+
+
+    def convert_str_to_data(self, data_str):
+        try:
+            res = data_str.split(' ')
+            res[0] = int(res[0])
+            res[2] = (res[2] == "True")
+            diseases = res[3].strip('[]')
+            if diseases:
+                diseases = diseases.split(',')
+            else:
+                diseases = []
+            res[3] = diseases
+            return res
+        except Exception:
+            return None
+
+
 
     def check_status_from_beginning(self):
         files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir,f))]
-        print(files)
-        print(files[0][3:5])
+        files = self.filter_invalid_files(files)
+        files = self.sort_file_names(files)
+        
+        self.temp_root = self.root
+        self.root = None
+        
+        for file in files:
+            with open(os.path.join(self.storage_dir,file),'r') as node_file:
+
+                operation = node_file.readline()
+
+                patient_data = node_file.readline()
+                patient_data = self.convert_str_to_data(patient_data)
+
+                hash = node_file.readline()
+                hash = hash[6:] # Removing 'hash: '
+
+
+
+                
+
+
+
+
+
 
 
 
