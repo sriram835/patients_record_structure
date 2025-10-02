@@ -6,6 +6,8 @@ from datetime import datetime
 class PatientRecord:
     def __init__(self):
         self.tree = None
+        self.storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'storage'))
+        os.makedirs(self.storage_dir, exist_ok=True)
 
 
 
@@ -23,17 +25,24 @@ class PatientRecord:
         
 
     def add_node(self,operation, old_data,new_data):
-        time = self.getCurrentTime()
+        timestamp = self.getCurrentTime()
         hash = self.hash_function()
-        filePath = './storage/'+time
+        filePath = os.path.join(self.storage_dir,timestamp) 
+
         with open(filePath,'w') as node_file:
             node_file.write(operation)
             node_file.write('\n')
             if (operation == 'update'):
-                node_file.write(old_data)
+                old_data_str = self.convert_patient_data_to_str(old_data)
+                if (old_data_str is None):
+                    return False
+                node_file.write(old_data_str)
                 node_file.write('\n')
 
-            node_file.write(new_data)
+            new_data_str = self.convert_patient_data_to_str(new_data)
+            if (new_data_str is None):
+                return False
+            node_file.write(new_data_str)
             node_file.write('\n')
 
             node_file.write('hash: ')
@@ -47,6 +56,7 @@ class PatientRecord:
             os.chmod(filePath,0o444)
 
         print(f"Added node with name {filePath} and \nmade it readonly on platform: {platform_type}")
+        return True
 
 
 
@@ -70,7 +80,82 @@ class PatientRecord:
 
         return res
 
-            
+
+    
+    def sort_file_names(self, files):
+        if not files:
+            return []
+
+        def partition(low, high):
+            pivot = files[(low + high) // 2]
+            i, j = low, high
+            while i <= j:
+                while self.isNewerThanFirstFile(files[i], pivot):  # files[i] < pivot
+                    i += 1
+                while self.isNewerThanFirstFile(pivot, files[j]):  # files[j] > pivot
+                    j -= 1
+                if i <= j:
+                    files[i], files[j] = files[j], files[i]
+                    i += 1
+                    j -= 1
+            return i, j
+
+        def quick_sort_files(low, high):
+            if low < high:
+                i, j = partition(low, high)
+                quick_sort_files(low, j)
+                quick_sort_files(i, high)
+
+        quick_sort_files(0, len(files) - 1)
+        return files
+
+
+        
+
+    def isNewerThanFirstFile(self, file1, file2):
+        if (int(file1[6:10]) < int(file2[6:10])):
+            return True
+        elif (int(file1[6:10]) > int(file2[6:10])):
+            return False
+
+        if (int(file1[3:5]) < int(file2[3:5])):
+            return True
+        elif (int(file1[3:5]) > int(file2[3:5])):
+            return False
+
+        if (int(file1[0:2]) < int(file2[0:2])):
+            return True
+        elif (int(file1[0:2]) > int(file2[0:2])):
+            return False
+
+
+        if (int(file1[11:13]) < int(file2[11:13])):
+            return True
+        elif (int(file1[11:13]) > int(file2[11:13])):
+            return False
+
+        if (int(file1[14:16]) < int(file2[14:16])):
+            return True
+        elif (int(file1[14:16]) > int(file2[14:16])):
+            return False
+
+        if (int(file1[17:19]) < int(file2[17:19])):
+            return True
+        elif (int(file1[17:19]) > int(file2[17:19])):
+            return False
+
+
+
+    def check_status_from_beginning(self):
+        files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir,f))]
+        print(files)
+        print(files[0][3:5])
+
+
+
+        
+
+
 
 
 
@@ -84,4 +169,5 @@ class PatientRecord:
 
 if __name__ == '__main__':
     struc = PatientRecord()
-    struc.add_node('update','test old data','test new data')
+    #struc.add_node('add',None,[101,'Sri',False,['Disease1','Disease2']])
+    struc.check_status_from_beginning()
