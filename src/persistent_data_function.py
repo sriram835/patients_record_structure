@@ -182,17 +182,66 @@ class PatientRecord:
         
         self.temp_root = self.root
         self.root = None
+        choice = 0
+        index = 0
         
-        for file in files:
-            with open(os.path.join(self.storage_dir,file),'r') as node_file:
+        while (choice != 3):
+            print("1. See Next Node\n2.Display Tree\n3.Stop")
+            try:
+                choice = int(input("Enter choice: "))
+            except Exception:
+                print("Invalid choice")
+                continue
 
+            if choice == 3:
+                break
+
+            if choice == 2:
+                self.displayTree(self.root)
+                continue
+
+            with open(os.path.join(self.storage_dir,files[0]),'r') as node_file:
+
+                old_patient_data = None
                 operation = node_file.readline()
+                if operation == 'update':
+                    old_patient_data =node_file.readline()
+                    old_patient_data = self.convert_str_to_data(old_patient_data)
 
                 patient_data = node_file.readline()
                 patient_data = self.convert_str_to_data(patient_data)
 
                 hash = node_file.readline()
                 hash = hash[6:] # Removing 'hash: '
+                print(f"Operation done: {operation}")
+                if old_patient_data is not None:
+                    print(f"Old patient data:")
+                    print(f"ID: {old_patient_data[0]}")
+                    print(f"Name: {old_patient_data[1]}")
+                    print(f"Is cured: {old_patient_data[2]}")
+                    print(f"Diseases: {old_patient_data[3]}")
+
+                print(f"Current patient data:")
+                print(f"ID: {patient_data[0]}")
+                print(f"Name: {patient_data[1]}")
+                print(f"Is cured: {patient_data[2]}")
+                print(f"Diseases: {patient_data[3]}")
+
+
+
+
+    def displayTree(self,root):
+        if root is None:
+            return
+
+        self.displayTree(root.left)
+        print("\n------------------------------------")
+        print(f"Patient ID: {root.id}")
+        print(f"Patient Name: {root.name}")
+        print(f"Is cured: {root.isCured}")
+        print(f"List of diseases {root.diseases}")
+        print("------------------------------------\n")
+        self.displayTree(root.right)
 
 
 
