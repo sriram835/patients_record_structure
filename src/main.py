@@ -1,12 +1,14 @@
-import platform
-import hashlib
-import os
-from datetime import datetime
-import stat
 from collections import deque
+from datetime import datetime
+import os
+import hashlib
+import platform
+import stat
 
-# ---------------- AVL Node (single definition used by everything) ----------------
+# ---------------- PERSON 1 & 2 & 3 LIBRARY CLASSES ----------------
+
 class AVLNode:
+    # Person 1: Node model for patients
     def __init__(self, patient_id, patient_name, is_cured, diseases):
         self.patient_id = patient_id
         self.patient_name = patient_name
@@ -14,415 +16,36 @@ class AVLNode:
         self.diseases = diseases
         self.left = None
         self.right = None
-        self.height = 1
+        self.height = 1  # Person 1
 
-# ---------------- PatientRecord (merged, minimal changes) ----------------
-class PatientRecord:
-
-############### Initializing the Data structure ####################
+class AVLPatientTree:
     def __init__(self):
-        self.root = None
-        self.temp_root = None
-        # storage directory: same logic as provided (parent dir / storage)
-        self.storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'storage'))
-        os.makedirs(self.storage_dir, exist_ok=True)
+        self.root = None  # Person 1
 
-############### Hash Functions ####################
-    def hash_input(self, data):
-        if len(data) != 4:
-            return "INVALID"
-        
-        pid = str(data[0])
-        name_initial = data[1][0].upper() if data[1] else "_"
-        cured_initial = "T" if data[2] else "F"
-        disease_initial = "".join(d[0].lower() for d in data[3]) if data[3] else "_"
-        return pid + name_initial + cured_initial + disease_initial
-
-    def hash_function(self, root):
-        traversal = self.level_order_traversal(root)
-        traversal_str = ",".join(traversal)
-        return hashlib.sha256(traversal_str.encode()).hexdigest()
-
-
-    def level_order_traversal(self, root):
-        if not root:
-            return []
-        
-        result = []
-        queue = deque([root])
-        while queue:
-            node = queue.popleft()
-            if node:
-                # Build data tuple as the other modules expect
-                node_data = (node.patient_id, node.patient_name, node.is_cured, node.diseases)
-                result.append(self.hash_input(node_data))
-                queue.append(node.left)
-                queue.append(node.right)
-            else:
-                result.append("None")
-
-        return result
-
-
-############### Utility Functions ####################
-    def getCurrentTime(self):
-        # Get current time and format as filename (DD-MM-YYYY HH-MM-SS)
-        now = datetime.now()
-        formatted_time = now.strftime("%d-%m-%Y %H:%M:%S")
-        formatted_time = formatted_time.replace(':','-')
-        return formatted_time
-
-
-    def convert_patient_data_to_str(self,data):
-        if (len(data) != 4):
-            print("Invalid data has been given to the converting patient data to str function")
-            return None
-
-        id = data[0]
-        name = data[1]
-        isCured = data[2]
-        diseases = data[3]
-        res = f"{str(id)} {name} {str(isCured)} ["
-        for i in range(len(diseases)):
-            if (i != len(diseases)-1):
-                res+= f"{diseases[i]},"
-            else:
-                res+= f"{diseases[i]}"
-
-        res+="]"
-
-        return res
-
-
-    def convert_str_to_data(self, data_str):
-        try:
-            res = data_str.strip().split(' ')
-            # Expect exactly 4 parts; if patient_name contains spaces this will fail — but
-            # we keep the parser as originally provided (minimal change).
-            res[0] = int(res[0])
-            res[2] = (res[2] == "True")
-            diseases = res[3].strip('[]')
-            if diseases:
-                diseases = diseases.split(',')
-            else:
-                diseases = []
-            res[3] = diseases
-            return res
-        except Exception:
-            return None
-
-
-    def sort_file_names(self, files):
-        if not files:
-            return []
-
-        def partition(low, high):
-            pivot = files[(low + high) // 2]
-            i, j = low, high
-            while i <= j:
-                while self.isNewerThanFirstFile(files[i], pivot):  # files[i] < pivot
-                    i += 1
-                while self.isNewerThanFirstFile(pivot, files[j]):  # files[j] > pivot
-                    j -= 1
-                if i <= j:
-                    files[i], files[j] = files[j], files[i]
-                    i += 1
-                    j -= 1
-            return i, j
-
-        def quick_sort_files(low, high):
-            if low < high:
-                i, j = partition(low, high)
-                quick_sort_files(low, j)
-                quick_sort_files(i, high)
-
-        quick_sort_files(0, len(files) - 1)
-        return files
-
-
-    def isNewerThanFirstFile(self, file1, file2):
-        # Keep original comparison logic (minimal change)
-        if (int(file1[6:10]) < int(file2[6:10])):
-            return True
-        elif (int(file1[6:10]) > int(file2[6:10])):
-            return False
-
-        if (int(file1[3:5]) < int(file2[3:5])):
-            return True
-        elif (int(file1[3:5]) > int(file2[3:5])):
-            return False
-
-        if (int(file1[0:2]) < int(file2[0:2])):
-            return True
-        elif (int(file1[0:2]) > int(file2[0:2])):
-            return False
-
-
-        if (int(file1[11:13]) < int(file2[11:13])):
-            return True
-        elif (int(file1[11:13]) > int(file2[11:13])):
-            return False
-
-        if (int(file1[14:16]) < int(file2[14:16])):
-            return True
-        elif (int(file1[14:16]) > int(file2[14:16])):
-            return False
-
-        if (int(file1[17:19]) < int(file2[17:19])):
-            return True
-        elif (int(file1[17:19]) > int(file2[17:19])):
-            return False
-
-
-    def filter_invalid_files(self, files):
-        valid_files = []
-        for f in files:
-            try:
-                # Try to parse with datetime; note: parser expects exact format
-                datetime.strptime(f, "%d-%m-%Y %H-%M-%S")
-                valid_files.append(f)
-            except ValueError:
-                print(f"Invalid filename skipped: {f}")
-        return valid_files
-
-    # Utility getters for height and balance (kept from provided code)
+    # ---------- Utilities (Person 1) ----------
     def get_height(self, node):
-        if not node:
-            return 0
-        return node.height
+        return node.height if node else 0
 
     def get_balance(self, node):
-        if not node:
-            return 0
-        return self.get_height(node.left) - self.get_height(node.right)
+        return self.get_height(node.left) - self.get_height(node.right) if node else 0
 
-    # level_order generator (kept from provided code)
-    def level_order(self):
-        if not self.root:
-            return
-        queue = deque([self.root])
-        while queue:
-            node = queue.popleft()
-            if node:
-                yield node
-                queue.append(node.left)
-                queue.append(node.right)
-
-
-############### Core Functions of Persistent Data Structure ####################
-    def add_node(self,operation, old_data,new_data):
-        timestamp = self.getCurrentTime()
-        # compute hash over current tree structure (use self.root)
-        node_hash = self.hash_function(self.root)
-        filePath = os.path.join(self.storage_dir,timestamp) 
-
-        with open(filePath,'w') as node_file:
-            node_file.write(operation)
-            node_file.write('\n')
-            if (operation == 'update'):
-                old_data_str = self.convert_patient_data_to_str(old_data)
-                if (old_data_str is None):
-                    return False
-                node_file.write(old_data_str)
-                node_file.write('\n')
-
-            new_data_str = self.convert_patient_data_to_str(new_data)
-            if (new_data_str is None):
-                return False
-            node_file.write(new_data_str)
-            node_file.write('\n')
-
-            node_file.write('hash: ')
-            node_file.write(node_hash)
-
-
-        platform_type = platform.system()
-        try:
-            if (platform_type == 'Windows'):
-                os.chmod(filePath,stat.S_IREAD)
-            else:
-                os.chmod(filePath,0o444)
-        except Exception as e:
-            # permission change might fail in some environments; keep minimal change
-            print(f"Warning: could not change file permissions: {e}")
-
-        print(f"Added node with name {filePath} and \nmade it readonly on platform: {platform_type}")
-        return True
-
-
-    def check_status_from_beginning(self):
-        files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir,f))]
-        files = self.filter_invalid_files(files)
-        files = self.sort_file_names(files)
-        
-        self.temp_root = self.root
-        self.root = None
-        choice = 0
-        index = 0
-        
-        while (choice != 3):
-            print("1. See Next Node\n2.Display Tree\n3.Stop")
-            try:
-                choice = int(input("Enter choice: "))
-            except Exception:
-                print("Invalid choice")
-                continue
-
-            if choice == 3:
-                break
-
-            if choice == 2:
-                self.displayTree(self.root)
-                continue
-
-            # NOTE: original code opened files[0]; keep same behavior (minimal change)
-            with open(os.path.join(self.storage_dir,files[0]),'r') as node_file:
-
-                old_patient_data = None
-                operation = node_file.readline().strip()
-                if operation == 'update':
-                    old_patient_data = node_file.readline().strip()
-                    old_patient_data = self.convert_str_to_data(old_patient_data)
-
-                patient_data = node_file.readline().strip()
-                patient_data = self.convert_str_to_data(patient_data)
-
-                hash_line = node_file.readline().strip()
-                hash_value = hash_line[6:] if hash_line.startswith('hash: ') else hash_line
-                print(f"Operation done: {operation}")
-                if old_patient_data is not None:
-                    print(f"Old patient data:")
-                    print(f"ID: {old_patient_data[0]}")
-                    print(f"Name: {old_patient_data[1]}")
-                    print(f"Is cured: {old_patient_data[2]}")
-                    print(f"Diseases: {old_patient_data[3]}")
-
-                print(f"Current patient data:")
-                print(f"ID: {patient_data[0]}")
-                print(f"Name: {patient_data[1]}")
-                print(f"Is cured: {patient_data[2]}")
-                print(f"Diseases: {patient_data[3]}")
-
-
-
-    # --------- CONSTRUCT TREE FROM FILE ----------
-    def construct_tree_from_file(self, filepath):
-        # keep behavior: empty root then insert lines
-        self.root = None
-        with open(filepath, 'r') as file:
-            lines = file.readlines()
-            for line in lines:
-                data = self._parse_line(line)
-                if data:
-                    self.root = self._insert(self.root, *data)
-
-    def _parse_line(self, line):
-        try:
-            parts = line.strip().split(' ', 3)
-            patient_id = int(parts[0])
-            patient_name = parts[1]
-            is_cured = parts[2] == "True"
-            diseases_str = parts[3][1:-1]
-            if diseases_str:
-                diseases = [d.strip() for d in diseases_str.split(',') if d]
-            else:
-                diseases = []
-            return (patient_id, patient_name, is_cured, diseases)
-        except Exception:
-            return None
- 
-
-
-############### Core functions for the AVL tree ####################
+    # ---------- Rotations (Person 3) ----------
     def right_rotate(self, y):
-        x = y.left
-        T2 = x.right
-        x.right = y
-        y.left = T2
+        x, T2 = y.left, y.left.right
+        x.right, y.left = y, T2
         y.height = 1 + max(self.get_height(y.left), self.get_height(y.right))
         x.height = 1 + max(self.get_height(x.left), self.get_height(x.right))
         return x
 
-
     def left_rotate(self, x):
-        y = x.right
-        T2 = y.left
-        y.left = x
-        x.right = T2
+        y, T2 = x.right, x.right.left
+        y.left, x.right = x, T2
         x.height = 1 + max(self.get_height(x.left), self.get_height(x.right))
         y.height = 1 + max(self.get_height(y.left), self.get_height(y.right))
         return y
 
-
-    # --------- REMOVE (DELETE PATIENT) ----------
-    def remove(self, patient_id):
-        self.root = self._remove(self.root, patient_id)
-
-
-    def _remove(self, node, patient_id):
-        if not node:
-            return node
-        if patient_id < node.patient_id:
-            node.left = self._remove(node.left, patient_id)
-        elif patient_id > node.patient_id:
-            node.right = self._remove(node.right, patient_id)
-        else:
-            # Node to delete found
-            if node.left is None:
-                return node.right
-            if node.right is None:
-                return node.left
-            # Node with two children
-            min_larger_node = self._get_min_value_node(node.right)
-            node.patient_id = min_larger_node.patient_id
-            node.patient_name = min_larger_node.patient_name
-            node.is_cured = min_larger_node.is_cured
-            node.diseases = min_larger_node.diseases
-            node.right = self._remove(node.right, min_larger_node.patient_id)
-        node.height = 1 + max(self.get_height(node.left), self.get_height(node.right))
-        return self._balance(node)
-
-
-    def _get_min_value_node(self, node):
-        while node.left:
-            node = node.left
-        return node
-
-
-    def _balance(self, node):
-        balance = self.get_balance(node)
-        if balance > 1:
-            if self.get_balance(node.left) >= 0:
-                return self.right_rotate(node)
-            else:
-                node.left = self.left_rotate(node.left)
-                return self.right_rotate(node)
-        if balance < -1:
-            if self.get_balance(node.right) <= 0:
-                return self.left_rotate(node)
-            else:
-                node.right = self.right_rotate(node.right)
-                return self.left_rotate(node)
-        return node
-
-
-    # --------- UPDATE PATIENT DATA ----------
-    def update(self, patient_id, new_name=None, new_is_cured=None, new_diseases=None):
-        node = self._search(self.root, patient_id)
-        if node:
-            if new_name is not None:
-                node.patient_name = new_name
-            if new_is_cured is not None:
-                node.is_cured = new_is_cured
-            if new_diseases is not None:
-                node.diseases = new_diseases
-            return True
-        else:
-            return False
-
-    # --------- INSERT & SEARCH (copied from Group A, minimal add) ----------
+    # ---------- Insert / Search (Person 2) ----------
     def insert(self, patient_id, patient_name, is_cured, diseases):
-        # keep the same API as Group A
         self.root = self._insert(self.root, patient_id, patient_name, is_cured, diseases)
 
     def _insert(self, node, patient_id, patient_name, is_cured, diseases):
@@ -433,7 +56,7 @@ class PatientRecord:
         elif patient_id > node.patient_id:
             node.right = self._insert(node.right, patient_id, patient_name, is_cured, diseases)
         else:
-            return node  # duplicate IDs not allowed
+            return node
         node.height = 1 + max(self.get_height(node.left), self.get_height(node.right))
         return self._balance(node)
 
@@ -442,45 +65,445 @@ class PatientRecord:
             return None
         if patient_id == node.patient_id:
             return node
-        elif patient_id < node.patient_id:
-            return self._search(node.left, patient_id)
+        return self._search(node.left, patient_id) if patient_id < node.patient_id else self._search(node.right, patient_id)
+
+    # ---------- Remove (Person 1) ----------
+    def remove(self, patient_id):
+        self.root = self._remove(self.root, patient_id)
+
+    def _remove(self, node, patient_id):
+        if not node:
+            return node
+        if patient_id < node.patient_id:
+            node.left = self._remove(node.left, patient_id)
+        elif patient_id > node.patient_id:
+            node.right = self._remove(node.right, patient_id)
         else:
-            return self._search(node.right, patient_id)
+            if not node.left:
+                return node.right
+            if not node.right:
+                return node.left
+            succ = self._get_min_value_node(node.right)
+            node.patient_id, node.patient_name, node.is_cured, node.diseases = (
+                succ.patient_id, succ.patient_name, succ.is_cured, succ.diseases
+            )
+            node.right = self._remove(node.right, succ.patient_id)
+        node.height = 1 + max(self.get_height(node.left), self.get_height(node.right))
+        return self._balance(node)
 
- 
-############### Display Tree Functions ####################
-    def displayTree(self,root):
-        if root is None:
+    def _get_min_value_node(self, node):
+        while node.left:
+            node = node.left
+        return node
+
+    # ---------- Balance Logic (Person 1) ----------
+    def _balance(self, node):
+        bal = self.get_balance(node)
+        if bal > 1:
+            if self.get_balance(node.left) < 0:
+                node.left = self.left_rotate(node.left)
+            return self.right_rotate(node)
+        if bal < -1:
+            if self.get_balance(node.right) > 0:
+                node.right = self.right_rotate(node.right)
+            return self.left_rotate(node)
+        return node
+
+    # ---------- Update (Person 1) ----------
+    def update(self, patient_id, new_name=None, new_is_cured=None, new_diseases=None):
+        node = self._search(self.root, patient_id)
+        if not node:
+            return False
+        if new_name is not None:
+            node.patient_name = new_name
+        if new_is_cured is not None:
+            node.is_cured = new_is_cured
+        if new_diseases is not None:
+            node.diseases = new_diseases
+        return True
+
+    # ---------- Display & Validate (Person 3) ----------
+    def display_tree(self):
+        if not self.root:
+            print("Tree is empty")
             return
+        print("\n" + "="*50)
+        print("PATIENT TREE (In-order)")
+        print("="*50)
+        self._inorder(self.root)
 
-        self.displayTree(root.left)
-        print("\n------------------------------------")
-        print(f"Patient ID: {root.patient_id}")
-        print(f"Patient Name: {root.patient_name}")
-        print(f"Is cured: {root.is_cured}")
-        print(f"List of diseases {root.diseases}")
-        print("------------------------------------\n")
-        self.displayTree(root.right)
+    def _inorder(self, node):
+        if not node:
+            return
+        self._inorder(node.left)
+        print(f"ID: {node.patient_id} | Name: {node.patient_name} | Cured: {node.is_cured} | Diseases: {', '.join(node.diseases)}")
+        self._inorder(node.right)
 
+    def check_avl_properties(self):
+        h, ok = self._check_balance(self.root)
+        print(f"{'✓ Balanced' if ok else '✗ Not balanced'} (Height: {h})")
+        return ok
 
-# ---------------- Example usage / test ----------------
-if __name__ == '__main__':
-    struc = PatientRecord()
-    # Insert a patient (uses Group A insertion signature)
-    struc.insert(101, 'Sri', False, ['Disease1','Disease2'])
-    # Add a persistent node recording this addition (operation string, old_data, new_data)
-    # Note: old_data is None for add
-    struc.add_node('add', None, [101, 'Sri', False, ['Disease1','Disease2']])
+    def _check_balance(self, node):
+        if not node:
+            return 0, True
+        lh, lb = self._check_balance(node.left)
+        rh, rb = self._check_balance(node.right)
+        h = max(lh, rh) + 1
+        bal = lh - rh
+        ok = lb and rb and abs(bal) <= 1
+        if not ok:
+            print(f" Imbalance at ID {node.patient_id}: factor {bal}")
+        return h, ok
 
-    # Display current tree+
-    struc.displayTree(struc.root)
+    # ---------- Parsing & File IO helpers ----------
+    def _parse_line(self, line):
+        try:
+            parts = line.strip().split(' ', 3)
+            patient_id = int(parts[0])
+            patient_name = parts[1]
+            is_cured = parts[2] == "True"
+            diseases_str = parts[3][1:-1] if len(parts) > 3 else ""
+            if diseases_str:
+                diseases = [d.strip() for d in diseases_str.split(',') if d]
+            else:
+                diseases = []
+            return (patient_id, patient_name, is_cured, diseases)
+        except Exception:
+            return None
 
-    # Save tree to a file (deconstruct) — use same format as group2 function
-    timestamp = struc.getCurrentTime()
-    filepath = os.path.join(struc.storage_dir, timestamp + "_tree.txt")
-    # Use deconstruct logic: reusing level_order generator and formatted line writing
-    with open(filepath, 'w') as f:
-        for node in struc.level_order():
-            line = f"{node.patient_id} {node.patient_name} {node.is_cured} [{','.join(node.diseases)}]\n"
-            f.write(line)
-    print(f"Tree written to {filepath}")
+    # --------- CONSTRUCT TREE FROM FILE ----------
+    def construct_tree_from_file(self, filepath):
+        # Keep behavior: empty root then insert lines
+        self.root = None
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as file:
+                lines = file.readlines()
+                for line in lines:
+                    if line.strip() == "None":
+                        continue
+                    data = self._parse_line(line)
+                    if data:
+                        # Use the internal insert so balancing happens
+                        self.root = self._insert(self.root, *data)
+            return self.root
+        return None
+
+    def deconstruct_tree_to_file(self, filename):
+        with open(filename, 'w') as file:
+            if not self.root:
+                return
+            queue = deque([self.root])
+            level_order_nodes = []
+            while queue:
+                node = queue.popleft()
+                level_order_nodes.append(node)
+                if node is not None:
+                    queue.append(node.left)
+                    queue.append(node.right)
+            last_real_index = len(level_order_nodes) - 1
+            while last_real_index >= 0 and level_order_nodes[last_real_index] is None:
+                last_real_index -= 1
+            level_order_nodes = level_order_nodes[:last_real_index + 1]
+            for node in level_order_nodes:
+                if node is None:
+                    file.write("None\n")
+                else:
+                    diseases_str = ",".join(node.diseases)
+                    line = f"{node.patient_id} {node.patient_name} {node.is_cured} [{diseases_str}]\n"
+                    file.write(line)
+
+# ---------------- PERSON 4 & 5 PERSISTENT STORAGE ----------------
+
+class PatientRecord:
+    def __init__(self):
+        self.storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'storage'))
+        os.makedirs(self.storage_dir, exist_ok=True)
+        self.tree_obj = AVLPatientTree()
+        # load into tree_obj.root and also keep a quick reference to root
+        current_path = os.path.join(self.storage_dir, 'current_tree')
+        self.tree_obj.construct_tree_from_file(current_path)
+        self.root = self.tree_obj.root
+
+    def __del__(self):
+        # Save the current tree to disk when object is destroyed
+        current_path = os.path.join(self.storage_dir, 'current_tree')
+        # make sure tree_obj.root reflects self.root
+        self.tree_obj.root = self.root
+        self.tree_obj.deconstruct_tree_to_file(current_path)
+        print("Exiting...")
+
+    def getCurrentTime(self):
+        return datetime.now().strftime("%d-%m-%Y %H:%M:%S").replace(":", "-")
+
+    def hash_input(self, data):
+        pid, name, cured, diseases = data
+        if len((pid, name, cured, diseases)) != 4:
+            return "INVALID"
+        ni = name[0].upper() if name else "_"
+        ci = "T" if cured else "F"
+        di = "".join(d[0].lower() for d in diseases) if diseases else "_"
+        return f"{pid}{ni}{ci}{di}"
+
+    def level_order_traversal(self, root):
+        if not root:
+            return []
+        q, res = deque([root]), []
+        while q:
+            n = q.popleft()
+            if n:
+                res.append(self.hash_input((n.patient_id, n.patient_name, n.is_cured, n.diseases)))
+                q.append(n.left); q.append(n.right)
+            else:
+                res.append("None")
+        return res
+
+    def hash_function(self, root):
+        return hashlib.sha256(",".join(self.level_order_traversal(root)).encode()).hexdigest()
+
+    def filter_invalid_files(self, files):
+        out = []
+        for f in files:
+            try:
+                # file names are timestamps like "08-10-2025 19-31-46"
+                datetime.strptime(f, "%d-%m-%Y %H-%M-%S")
+                out.append(f)
+            except:
+                pass
+        return out
+
+    def sort_file_names(self, files):
+        return sorted(files, key=lambda f: datetime.strptime(f, "%d-%m-%Y %H-%M-%S"))
+
+    def convert_data_to_str(self, d):
+        pid, name, cured, dis = d
+        return f"{pid} {name} {cured} [{','.join(dis)}]"
+
+    def convert_str_to_data(self, s):
+        parts = s.strip().split(' ', 3)
+        pid = int(parts[0]); name = parts[1]; cured = (parts[2] == "True")
+        dis = parts[3].strip("[]") if len(parts) > 3 else ""
+        diseases = dis.split(',') if dis else []
+        return [pid, name, cured, diseases]
+
+    def add_node(self, operation, old_data, new_data):
+        ts = self.getCurrentTime()
+        # Ensure the tree object root matches self.root before hashing
+        self.tree_obj.root = self.root
+        h = self.hash_function(self.tree_obj.root)
+        path = os.path.join(self.storage_dir, ts)
+        with open(path,'w') as f:
+            f.write(operation + "\n")
+            if operation == "update":
+                f.write(self.convert_data_to_str(old_data) + "\n")
+            if new_data is not None:
+                f.write(self.convert_data_to_str(new_data) + "\n")
+            f.write("hash: " + h)
+        mode = stat.S_IREAD if platform.system() == "Windows" else 0o444
+        try:
+            os.chmod(path, mode)
+        except Exception:
+            pass
+        print(f"Added record {path}")
+
+    def rollback(self):
+        files = self.filter_invalid_files(os.listdir(self.storage_dir))
+        files = self.sort_file_names(files)
+        if len(files) < 2:
+            print("No previous state")
+            return None
+        prev = files[-2]
+        with open(os.path.join(self.storage_dir, prev)) as f:
+            op = f.readline().strip()
+            old = None
+            if op == "update":
+                old = self.convert_str_to_data(f.readline().strip())
+            new = self.convert_str_to_data(f.readline().strip())
+            h_line = f.readline()
+            h = h_line.split(" ",1)[1].strip() if h_line and " " in h_line else ""
+        ch = self.hash_function(self.root)
+        print("Hash OK" if ch == h else "Hash mismatch")
+        print(f"Rolling back {op}")
+        return {"op": op, "old": old, "new": new}
+
+    # ----------------- check_status_from_beginning (replay all files) -----------------
+    def check_status_from_beginning(self):
+        files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir, f))]
+        files = self.filter_invalid_files(files)
+        files = self.sort_file_names(files)
+        print("History files:", files)
+
+        temp_root = None
+        index = 0
+
+        while index < len(files):
+            print("\n1. See Next Node\n2. Display Tree\n3. Stop")
+            try:
+                choice = int(input("Enter choice: "))
+            except Exception:
+                print("Invalid choice")
+                continue
+
+            if choice == 3:
+                break
+
+            if choice == 2:
+                # display current temp_root by temporarily assigning to tree_obj and showing
+                self.tree_obj.root = temp_root
+                self.tree_obj.display_tree()
+                continue
+
+            # choice == 1: read next file and apply operation on temp_root
+            file_path = os.path.join(self.storage_dir, files[index])
+            with open(file_path, 'r') as node_file:
+                old_patient_data = None
+                operation = node_file.readline().strip()
+                if operation == 'update':
+                    old_line = node_file.readline().strip()
+                    old_patient_data = self.convert_str_to_data(old_line) if old_line else None
+
+                # next line is the current/new patient data
+                patient_line = node_file.readline().strip()
+                if not patient_line:
+                    print("Could not read data from file")
+                    return False
+                patient_data = self.convert_str_to_data(patient_line)
+
+                hash_line = node_file.readline().strip()
+                h = hash_line.split(" ",1)[1].strip() if hash_line and " " in hash_line else ""
+
+                print(f"Operation done: {operation}")
+                if old_patient_data is not None:
+                    print(f"Old patient data: {old_patient_data}")
+                print(f"Current patient data: {patient_data}")
+
+                # apply operation to temp_root using low-level functions on tree_obj
+                if operation == 'add':
+                    temp_root = self.tree_obj._insert(temp_root, patient_data[0], patient_data[1], patient_data[2], patient_data[3])
+                elif operation == 'update':
+                    # locate node in temp_root and update its fields
+                    node = self.tree_obj._search(temp_root, patient_data[0])
+                    if node:
+                        node.patient_name = patient_data[1]
+                        node.is_cured = patient_data[2]
+                        node.diseases = patient_data[3]
+                    else:
+                        # if not found insert (shouldn't normally happen)
+                        temp_root = self.tree_obj._insert(temp_root, patient_data[0], patient_data[1], patient_data[2], patient_data[3])
+                elif operation == 'remove':
+                    temp_root = self.tree_obj._remove(temp_root, patient_data[0])
+                else:
+                    print("No suitable operation")
+                    return False
+
+                new_hash = self.hash_function(temp_root)
+                if new_hash != h:
+                    print("The persistent data storage files has been edited or corrupted.")
+                    return False
+                index += 1
+
+        print("Reached the end of files")
+        return True
+
+# ---------------- PERSON 3 INTERACTIVE TESTER ----------------
+
+class InteractiveAVLTester:
+    def __init__(self):
+        self.tree = AVLPatientTree()
+        self.records = PatientRecord()
+        print("AVL Patient Tree Interactive Tester")
+        print("="*40)
+
+    def get_input(self):
+        try:
+            pid=int(input("Patient ID: "))
+            name=input("Name: ").strip()
+            ci=input("Cured? (y/n): ").strip().lower()
+            cured=ci in ['y','yes']
+            di=input("Diseases (comma sep): ").strip()
+            dis=[d.strip() for d in di.split(',') if d.strip()] if di else []
+            return pid,name,cured,dis
+        except:
+            print("Invalid"); return None
+
+    def test_insert(self):
+        d=self.get_input()
+        if d:
+            pid,name,cured,dis=d
+            self.tree.insert(pid,name,cured,dis)
+            self.records.root=self.tree.root
+            self.records.add_node("add",None,[pid,name,cured,dis])
+            print("Inserted",pid); self.tree.check_avl_properties()
+
+    def test_update(self):
+        try:
+            pid=int(input("Update ID: "))
+            n=self.tree._search(self.tree.root,pid)
+            if not n: print("Not found"); return
+            old=[n.patient_id,n.patient_name,n.is_cured,n.diseases.copy()]
+            nn=input("New name(skip): ").strip() or None
+            ci=input("New cured? (y/n skip): ").strip().lower()
+            nic=True if ci in ['y','yes'] else False if ci in ['n','no'] else None
+            di=input("New diseases(skip): ").strip()
+            nd=[d.strip() for d in di.split(',') if d.strip()] if di else None
+            ok=self.tree.update(pid,new_name=nn,new_is_cured=nic,new_diseases=nd)
+            if ok:
+                new=[pid,nn or old[1],nic if nic is not None else old[2],nd if nd else old[3]]
+                self.records.root=self.tree.root
+                self.records.add_node("update",old,new)
+                print("Updated")
+            else:
+                print("Failed")
+        except:
+            print("Invalid")
+
+    def test_remove(self):
+        try:
+            pid=int(input("Remove ID: "))
+            n=self.tree._search(self.tree.root,pid)
+            if not n: print("Not found"); return
+            old=[n.patient_id,n.patient_name,n.is_cured,n.diseases.copy()]
+            self.tree.remove(pid)
+            self.records.root=self.tree.root
+            self.records.add_node("remove",old,None)
+            print("Removed",pid); self.tree.check_avl_properties()
+        except:
+            print("Invalid")
+
+    def test_search(self):
+        try:
+            pid=int(input("Search ID: "))
+            n=self.tree._search(self.tree.root,pid)
+            if n: print("Found:",n.patient_name)
+            else: print("Not found")
+        except:
+            print("Invalid")
+
+    def roll_back(self):
+        r=self.records.rollback()
+        if not r: return
+        op,old,new=r["op"],r["old"],r["new"]
+        if op=="add":
+            self.tree.remove(new[0]); print("Rolled back add")
+        elif op=="remove":
+            self.tree.insert(*old); print("Rolled back remove")
+        elif op=="update":
+            self.tree.update(old[0], new_name=old[1], new_is_cured=old[2], new_diseases=old[3])
+            print("Rolled back update")
+
+    def run(self):
+        while True:
+            print("\nMenu: 1.Add 2.Update 3.Remove 4.Search 5.Display 6.RollBack 7.check_status_from_beginning 8.Exit")
+            c=input("Choice: ").strip()
+            if c=='1': self.test_insert()
+            elif c=='2': self.test_update()
+            elif c=='3': self.test_remove()
+            elif c=='4': self.test_search()
+            elif c=='5': self.tree.display_tree()
+            elif c=='6': self.roll_back()
+            elif c=='7': self.records.check_status_from_beginning()
+            elif c=='8': break
+            else: print("Invalid")
+
+if __name__=="__main__":
+    InteractiveAVLTester().run()
