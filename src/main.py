@@ -430,7 +430,7 @@ class PatientRecord:
                         node.is_cured = patient_data[2]
                         node.diseases = patient_data[3]
                     else:
-                        temp_root = tree_obj._insert(temp_root, *patient_data)
+                        return False
                 elif operation == 'remove':
                     temp_root = tree_obj._remove(temp_root, patient_data[0])
                 else:
