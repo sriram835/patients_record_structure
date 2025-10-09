@@ -4,6 +4,7 @@ import os
 import hashlib
 import platform
 import stat
+import pickle
 
 # ---------------- PERSON 1 & 2 & 3 LIBRARY CLASSES ----------------
 
@@ -123,6 +124,7 @@ class AVLPatientTree:
         return True
 
     # ---------- Display & Validate (Person 3) ----------
+
     def display_tree(self):
         if not self.root:
             print("Tree is empty")
@@ -213,6 +215,7 @@ class AVLPatientTree:
                     line = f"{node.patient_id} {node.patient_name} {node.is_cured} [{diseases_str}]\n"
                     file.write(line)
 
+
 # ---------------- PERSON 4 & 5 PERSISTENT STORAGE ----------------
 
 class PatientRecord:
@@ -224,7 +227,7 @@ class PatientRecord:
         current_path = os.path.join(self.storage_dir, 'current_tree')
         self.tree_obj.construct_tree_from_file(current_path)
         self.root = self.tree_obj.root
-
+        
     def __del__(self):
         # Save the current tree to disk when object is destroyed
         current_path = os.path.join(self.storage_dir, 'current_tree')
@@ -305,27 +308,6 @@ class PatientRecord:
         except Exception:
             pass
         print(f"Added record {path}")
-
-    # def rollback(self):
-    #     files = self.filter_invalid_files(os.listdir(self.storage_dir))
-    #     files = self.sort_file_names(files)
-    #     if len(files) < 2:
-    #         print("No previous state")
-    #         return None
-    #     prev = files[-2]
-    #     with open(os.path.join(self.storage_dir, prev)) as f:
-    #         op = f.readline().strip()
-    #         old = None
-    #         if op == "update":
-    #             old = self.convert_str_to_data(f.readline().strip())
-    #         new = self.convert_str_to_data(f.readline().strip())
-    #         h_line = f.readline()
-    #         h = h_line.split(" ",1)[1].strip() if h_line and " " in h_line else ""
-    #     ch = self.hash_function(self.root)
-    #     print("Hash OK" if ch == h else "Hash mismatch")
-    #     print(f"Rolling back {op}")
-    #     return {"op": op, "old": old, "new": new}
-    
 
     def delete_sorted_data(self):
         files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir, f))]
@@ -410,12 +392,10 @@ class PatientRecord:
                 break
 
             if choice == 2:
-                # display current temp_root by temporarily assigning to tree_obj and showing
                 self.tree_obj.root = temp_root
                 self.tree_obj.display_tree()
                 continue
 
-            # choice == 1: read next file and apply operation on temp_root
             file_path = os.path.join(self.storage_dir, files[index])
             with open(file_path, 'r') as node_file:
                 old_patient_data = None
@@ -424,7 +404,6 @@ class PatientRecord:
                     old_line = node_file.readline().strip()
                     old_patient_data = self.convert_str_to_data(old_line) if old_line else None
 
-                # next line is the current/new patient data
                 patient_line = node_file.readline().strip()
                 if not patient_line:
                     print("Could not read data from file")
@@ -435,37 +414,40 @@ class PatientRecord:
                 h = hash_line.split(" ",1)[1].strip() if hash_line and " " in hash_line else ""
 
                 print(f"Operation done: {operation}")
-                if old_patient_data is not None:
+                if old_patient_data:
                     print(f"Old patient data: {old_patient_data}")
                 print(f"Current patient data: {patient_data}")
 
-                # apply operation to temp_root using low-level functions on tree_obj
+                # ---- use consistent tree_obj reference ----
+                tree_obj = self.tree_obj
+
                 if operation == 'add':
-                    temp_root = self.tree_obj._insert(temp_root, patient_data[0], patient_data[1], patient_data[2], patient_data[3])
+                    temp_root = tree_obj._insert(temp_root, *patient_data)
                 elif operation == 'update':
-                    # locate node in temp_root and update its fields
-                    node = self.tree_obj._search(temp_root, patient_data[0])
+                    node = tree_obj._search(temp_root, patient_data[0])
                     if node:
                         node.patient_name = patient_data[1]
                         node.is_cured = patient_data[2]
                         node.diseases = patient_data[3]
                     else:
-                        # if not found insert (shouldn't normally happen)
-                        temp_root = self.tree_obj._insert(temp_root, patient_data[0], patient_data[1], patient_data[2], patient_data[3])
+                        temp_root = tree_obj._insert(temp_root, *patient_data)
                 elif operation == 'remove':
-                    temp_root = self.tree_obj._remove(temp_root, patient_data[0])
+                    temp_root = tree_obj._remove(temp_root, patient_data[0])
                 else:
                     print("No suitable operation")
                     return False
 
+                # Verify hash
                 new_hash = self.hash_function(temp_root)
                 if new_hash != h:
-                    print("The persistent data storage files has been edited or corrupted.")
+                    print("⚠️ Persistent data corrupted (hash mismatch).")
                     return False
+
                 index += 1
 
         print("Reached the end of files")
         return True
+
 
 # ---------------- PERSON 3 INTERACTIVE TESTER ----------------
 
