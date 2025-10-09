@@ -306,25 +306,87 @@ class PatientRecord:
             pass
         print(f"Added record {path}")
 
-    def rollback(self):
-        files = self.filter_invalid_files(os.listdir(self.storage_dir))
+    # def rollback(self):
+    #     files = self.filter_invalid_files(os.listdir(self.storage_dir))
+    #     files = self.sort_file_names(files)
+    #     if len(files) < 2:
+    #         print("No previous state")
+    #         return None
+    #     prev = files[-2]
+    #     with open(os.path.join(self.storage_dir, prev)) as f:
+    #         op = f.readline().strip()
+    #         old = None
+    #         if op == "update":
+    #             old = self.convert_str_to_data(f.readline().strip())
+    #         new = self.convert_str_to_data(f.readline().strip())
+    #         h_line = f.readline()
+    #         h = h_line.split(" ",1)[1].strip() if h_line and " " in h_line else ""
+    #     ch = self.hash_function(self.root)
+    #     print("Hash OK" if ch == h else "Hash mismatch")
+    #     print(f"Rolling back {op}")
+    #     return {"op": op, "old": old, "new": new}
+    
+
+    def delete_sorted_data(self):
+        files = [f for f in os.listdir(self.storage_dir) if os.path.isfile(os.path.join(self.storage_dir, f))]
+        files = self.filter_invalid_files(files)
         files = self.sort_file_names(files)
-        if len(files) < 2:
-            print("No previous state")
-            return None
-        prev = files[-2]
-        with open(os.path.join(self.storage_dir, prev)) as f:
-            op = f.readline().strip()
-            old = None
-            if op == "update":
-                old = self.convert_str_to_data(f.readline().strip())
-            new = self.convert_str_to_data(f.readline().strip())
-            h_line = f.readline()
-            h = h_line.split(" ",1)[1].strip() if h_line and " " in h_line else ""
-        ch = self.hash_function(self.root)
-        print("Hash OK" if ch == h else "Hash mismatch")
-        print(f"Rolling back {op}")
-        return {"op": op, "old": old, "new": new}
+        
+        if not files:
+            print("No data files found")
+            return
+        
+        print(f"\nFound {len(files)} data files. Starting from FIRST inserted (oldest) to LAST inserted (newest)...")
+        
+        # Start from the FIRST file (oldest/earliest)
+        index = 0
+        
+        while index < len(files):
+            file_path = os.path.join(self.storage_dir, files[index])
+            with open(file_path, 'r') as f:
+                operation = f.readline().strip()
+                if operation == "update":
+                    old_line = f.readline().strip()
+                current_line = f.readline().strip()
+                patient_data = self.convert_str_to_data(current_line)
+            
+            print(f"\n[{index + 1}/{len(files)}] Delete patient: ID {patient_data[0]}, Name: {patient_data[1]}, Cured: {patient_data[2]}, Diseases: {patient_data[3]}")
+            print(f"File: {files[index]} (Inserted: {files[index].replace('-', ':').replace(' ', ' at ')})")
+            print(f"Operation: {operation}")
+            
+            # Only accept yes or no
+            while True:
+                choice = input("Delete this record? (yes/no): ").strip().lower()
+                if choice in ['yes', 'y']:
+                    try:
+                        # Remove read-only attribute from file before deletion
+                        try:
+                            if platform.system() == "Windows":
+                                os.chmod(file_path, stat.S_IWRITE)
+                            else:
+                                os.chmod(file_path, 0o644)
+                        except Exception:
+                            pass
+                        
+                        # PERMANENTLY DELETE THE FILE - NO BACKUP
+                        os.remove(file_path)
+                        print(f"✓ PERMANENTLY DELETED file: {files[index]}")
+                        
+                    except Exception as e:
+                        print(f"✗ Error deleting file: {e}")
+                    
+                    index += 1
+                    break
+                    
+                elif choice in ['no', 'n']:
+                    print("Deletion stopped by user.")
+                    return  # Return to menu immediately
+                else:
+                    print("Please answer only with 'yes' or 'no'")
+            
+            if index >= len(files):
+                print("\n🎉 All files processed - storage is now empty!")
+                break
 
     # ----------------- check_status_from_beginning (replay all files) -----------------
     def check_status_from_beginning(self):
@@ -479,30 +541,127 @@ class InteractiveAVLTester:
         except:
             print("Invalid")
 
-    def roll_back(self):
-        r=self.records.rollback()
-        if not r: return
-        op,old,new=r["op"],r["old"],r["new"]
-        if op=="add":
-            self.tree.remove(new[0]); print("Rolled back add")
-        elif op=="remove":
-            self.tree.insert(*old); print("Rolled back remove")
-        elif op=="update":
-            self.tree.update(old[0], new_name=old[1], new_is_cured=old[2], new_diseases=old[3])
-            print("Rolled back update")
+    def rollback_to_previous_version(self):
+            """
+            Rollback by asking user "how many versions behind".
+            Verifies every intermediate version's saved hash by replaying files.
+            If verification succeeds, sets self.tree.root and self.records.root to the target root.
+            """
+            # load and sort valid files
+            try:
+                files = [f for f in os.listdir(self.records.storage_dir) if os.path.isfile(os.path.join(self.records.storage_dir, f))]
+            except Exception as e:
+                print(f"Could not access storage dir: {e}")
+                return
+
+            files = self.records.filter_invalid_files(files)
+            files = self.records.sort_file_names(files)
+
+            if len(files) < 2:
+                print("No previous state (need at least 2 versions to rollback).")
+                return
+
+            print("\n📜 Available Versions (Oldest → Newest):")
+            for idx, fn in enumerate(files, start=1):
+                print(f" {idx}. {fn}")
+            print(f"\n🔹 Current (latest) version: {files[-1]}")
+
+            # get steps_back input
+            try:
+                steps_back = int(input(f"Enter how many versions behind to roll back (1 to {len(files)-1}): ").strip())
+            except Exception:
+                print("Invalid input. Rollback cancelled.")
+                return
+
+            if steps_back < 1 or steps_back >= len(files):
+                print("Invalid rollback range. Rollback cancelled.")
+                return
+
+            # target index in files list (0-based)
+            target_index = len(files) - (steps_back + 1)
+            target_file = files[target_index]
+
+            # Verify chain: for each version from latest (len(files)-1) down to target_index,
+            # replay from beginning up to that version and ensure computed hash matches saved hash.
+            # We will replay incrementally to avoid repeating work unnecessarily.
+            temp_root = None
+            for verify_i in range(0, len(files)):
+                file_path = os.path.join(self.records.storage_dir, files[verify_i])
+                try:
+                    with open(file_path, 'r') as vf:
+                        op = vf.readline().strip()
+                        old_data = None
+                        if op == "update":
+                            old_line = vf.readline().strip()
+                            old_data = self.records.convert_str_to_data(old_line) if old_line else None
+                        # next line is new/current patient data
+                        new_line = vf.readline().strip()
+                        new_data = self.records.convert_str_to_data(new_line) if new_line else None
+                        # next line contains 'hash: <h>'
+                        hash_line = vf.readline().strip()
+                        saved_hash = hash_line.split(" ", 1)[1].strip() if hash_line and " " in hash_line else ""
+                except Exception as e:
+                    print(f"Could not read version file {files[verify_i]}: {e}. Rollback aborted.")
+                    return
+
+                # Apply this file's operation to temp_root using low-level functions (so balancing works)
+                if op == "add":
+                    temp_root = temp_root = self.records.tree_obj._insert(temp_root, new_data[0], new_data[1], new_data[2], new_data[3])
+                elif op == "update":
+                    # find node; if present update fields, else insert (defensive)
+                    node = self.records.tree_obj._search(temp_root, new_data[0])
+                    if node:
+                        node.patient_name = new_data[1]
+                        node.is_cured = new_data[2]
+                        node.diseases = new_data[3]
+                    else:
+                        temp_root = self.tree_obj._insert(temp_root, new_data[0], new_data[1], new_data[2], new_data[3])
+                elif op == "remove":
+                    temp_root = self.records.tree_obj._remove(temp_root, new_data[0])
+                else:
+                    print(f"Unknown operation '{op}' in file {files[verify_i]}. Rollback aborted.")
+                    return
+
+                # compute hash of temp_root and compare with saved_hash
+                computed_hash = self.records.hash_function(temp_root)
+
+                if computed_hash != saved_hash:
+                    print(f"⚠️ Hash mismatch detected on version '{files[verify_i]}'.")
+                    print("Rollback aborted to protect data integrity.")
+                    return
+
+                # If we've verified up to the target file (index), stop verifying further
+                if verify_i == target_index:
+                    break
+
+            # If we reach here, all intermediate files up to target_index were valid.
+            # temp_root currently equals the tree at target_index.
+            # Apply to live trees (so future operations continue from here).
+            self.records.root = temp_root
+            self.records.tree_obj.root = temp_root
+            self.tree.root = temp_root
+
+            print(f"\n✅ Successfully rolled back {steps_back} version(s).")
+            print(f"🔁 Now current version is: {files[target_index]}")
+            # NOTE: we do not auto-create a new storage file here. The next add/update/remove will call add_node and create the next version.
+
+
+    def delete_storage_data(self):
+        self.records.delete_sorted_data()
 
     def run(self):
         while True:
-            print("\nMenu: 1.Add 2.Update 3.Remove 4.Search 5.Display 6.RollBack 7.check_status_from_beginning 8.Exit")
+            print("\nMenu: 1.Add 2.Update 3.Remove 4.Search 5.Display 6.RollBack 7.check_status_from_beginning 8.DeleteStorage 9.Exit")
             c=input("Choice: ").strip()
             if c=='1': self.test_insert()
             elif c=='2': self.test_update()
             elif c=='3': self.test_remove()
             elif c=='4': self.test_search()
             elif c=='5': self.tree.display_tree()
-            elif c=='6': self.roll_back()
+            elif c=='6': self.rollback_to_previous_version()
             elif c=='7': self.records.check_status_from_beginning()
-            elif c=='8': break
+            elif c=='8': self.delete_storage_data()
+            elif c=='9': break
             else: print("Invalid")
 
 if __name__=="__main__":
